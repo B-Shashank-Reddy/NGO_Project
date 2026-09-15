@@ -33,6 +33,12 @@ const VolunteerTaskRegistration = sequelize.define(
   {
     tableName: "volunteer_task_registrations",
     timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["volunteerId", "taskId"],
+      },
+    ],
   }
 );
 

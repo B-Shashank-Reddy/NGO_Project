@@ -7,6 +7,7 @@ const {
   getAllEvents,
   getEventDetails,
   registerVolunteerForTask,
+  unregisterVolunteerFromTask,
   getVolunteerRegistrations,
 } = require("../controllers/volunteerController");
 
@@ -15,6 +16,7 @@ router.post("/login", loginVolunteer);
 router.get("/events", verifyToken, requireRole("volunteer"), getAllEvents);
 router.get("/events/:eventId", verifyToken, requireRole("volunteer"), getEventDetails);
 router.post("/events/register-task", verifyToken, requireRole("volunteer"), registerVolunteerForTask);
+router.delete("/events/tasks/:taskId/registration", verifyToken, requireRole("volunteer"), unregisterVolunteerFromTask);
 router.get("/registrations/:volunteerId", verifyToken, requireRole("volunteer"), getVolunteerRegistrations);
 
 module.exports = router;

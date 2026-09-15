@@ -1,5 +1,25 @@
 # NGO Platform - Testing Guide with Thunder Client
 
+## Automated Integration Tests
+
+The backend includes an integration suite for the authentication and first protected workflow. It requires PostgreSQL and the backend server to be running.
+
+Start the backend in one terminal:
+
+```powershell
+cd backend
+npm start
+```
+
+Run the tests from a second terminal:
+
+```powershell
+cd backend
+npm test
+```
+
+The suite verifies database health, registration, login, JWT-protected routes, missing and invalid authentication, role-based authorization, event creation, task creation, volunteer registration, and duplicate-registration protection. Test accounts use unique generated email addresses, so rerunning the suite is safe for existing records.
+
 ## Server Status
 
 - **URL**: http://localhost:5001

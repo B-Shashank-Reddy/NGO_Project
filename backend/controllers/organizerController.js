@@ -11,11 +11,24 @@ const signToken = (payload) => {
 exports.createOrganizer = async (req, res) => {
   try {
     const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "Username, email, and password are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const organizer = await Organizer.create({ username, email, password: hashedPassword });
     res.status(201).json({ message: "Organizer created", organizer: { id: organizer.id, username: organizer.username, email: organizer.email } });
   } catch (error) {
+    if (error.name === "SequelizeUniqueConstraintError") {
+      return res.status(409).json({ message: "Organizer username or email already exists" });
+    }
+
     res.status(400).json({ message: "Failed to create organizer", error: error.message });
   }
 };
@@ -23,6 +36,11 @@ exports.createOrganizer = async (req, res) => {
 exports.loginOrganizer = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
     const organizer = await Organizer.findOne({ where: { email } });
     if (!organizer) {
       return res.status(401).json({ message: "Invalid organizer credentials" });
@@ -51,9 +69,9 @@ exports.getAllOrganizers = async (req, res) => {
 
 exports.createEvent = async (req, res) => {
   try {
-    const { organizerId, name, description, place, eventDate, startTime, endTime } = req.body;
+    const { name, description, place, eventDate, startTime, endTime } = req.body;
     const event = await Event.create({
-      organizerId,
+      organizerId: req.user.id,
       name,
       description,
       place,
@@ -70,9 +88,8 @@ exports.createEvent = async (req, res) => {
 
 exports.getOrganizerEvents = async (req, res) => {
   try {
-    const { organizerId } = req.params;
     const events = await Event.findAll({
-      where: { organizerId },
+      where: { organizerId: req.user.id },
       include: [{ association: "tasks" }],
     });
 
@@ -86,6 +103,12 @@ exports.createTaskForEvent = async (req, res) => {
   try {
     const { eventId } = req.params;
     const { title, description, requiredVolunteers } = req.body;
+    const event = await Event.findOne({ where: { id: eventId, organizerId: req.user.id } });
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
     const task = await Task.create({ eventId, title, description, requiredVolunteers });
     res.status(201).json({ message: "Task created", task });
   } catch (error) {
@@ -96,6 +119,12 @@ exports.createTaskForEvent = async (req, res) => {
 exports.getEventTasks = async (req, res) => {
   try {
     const { eventId } = req.params;
+    const event = await Event.findOne({ where: { id: eventId, organizerId: req.user.id } });
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
     const tasks = await Task.findAll({ where: { eventId } });
     res.status(200).json(tasks);
   } catch (error) {

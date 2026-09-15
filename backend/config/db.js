@@ -22,11 +22,16 @@ const connectDatabase = async () => {
     await sequelize.authenticate();
     console.log("PostgreSQL connected successfully.");
 
-    await sequelize.sync({ alter: true });
-    console.log("Database tables synced successfully.");
+    if (process.env.DB_SYNC === "true") {
+      const syncOptions = process.env.DB_SYNC_ALTER === "true" ? { alter: true } : {};
+      await sequelize.sync(syncOptions);
+      console.log("Database tables synced successfully.");
+    } else {
+      console.log("Database schema sync skipped.");
+    }
   } catch (error) {
-    console.log("Database is not ready yet. Please create PostgreSQL and update the .env values.");
-    console.log(error.message);
+    console.error("Database connection failed:", error.message);
+    throw error;
   }
 };
 

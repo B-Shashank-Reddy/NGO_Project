@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const { sequelize, Admin, Organizer, Volunteer } = require("../models");
+const { resolveLocation } = require("../services/locationService");
 
 const modelByRole = {
   admin: Admin,
@@ -54,6 +55,15 @@ exports.updateCurrentAccount = async (req, res) => {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
       updates.password = await bcrypt.hash(req.body.password, 10);
+    }
+
+    if (req.body.locationLabel !== undefined || req.body.latitude !== undefined || req.body.longitude !== undefined) {
+      const location = await resolveLocation({
+        locationLabel: req.body.locationLabel ?? account.locationLabel,
+        latitude: req.body.latitude ?? account.latitude,
+        longitude: req.body.longitude ?? account.longitude,
+      });
+      Object.assign(updates, location);
     }
 
     if (!Object.keys(updates).length) {

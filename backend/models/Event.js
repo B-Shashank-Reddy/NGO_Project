@@ -21,6 +21,9 @@ const Event = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    locationLabel: DataTypes.STRING,
+    latitude: DataTypes.DOUBLE,
+    longitude: DataTypes.DOUBLE,
     eventDate: {
       type: DataTypes.DATE,
       allowNull: false,

@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { Organizer, Event, Task } = require("../models");
+const { resolveLocation } = require("../services/locationService");
 
 const signToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET || "supersecret", {
@@ -10,7 +11,7 @@ const signToken = (payload) => {
 
 exports.createOrganizer = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, locationLabel, latitude, longitude } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ message: "Username, email, and password are required" });
@@ -20,11 +21,17 @@ exports.createOrganizer = async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
+    const location = await resolveLocation({ locationLabel, latitude, longitude });
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const organizer = await Organizer.create({ username, email, password: hashedPassword });
+    const organizer = await Organizer.create({ username, email, password: hashedPassword, ...location });
     res.status(201).json({ message: "Organizer created", organizer: { id: organizer.id, username: organizer.username, email: organizer.email } });
   } catch (error) {
+    if (/location|latitude|longitude/i.test(error.message)) {
+      return res.status(400).json({ message: error.message });
+    }
+
     if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({ message: "Organizer username or email already exists" });
     }
@@ -73,12 +80,18 @@ exports.getAllOrganizers = async (req, res) => {
 
 exports.createEvent = async (req, res) => {
   try {
-    const { name, description, place, eventDate, startTime, endTime } = req.body;
+    const { name, description, place, locationLabel, latitude, longitude, eventDate, startTime, endTime } = req.body;
+    const location = await resolveLocation({
+      locationLabel: locationLabel || place,
+      latitude,
+      longitude,
+    });
     const event = await Event.create({
       organizerId: req.user.id,
       name,
       description,
-      place,
+      place: location.locationLabel,
+      ...location,
       eventDate,
       startTime,
       endTime,
@@ -86,6 +99,10 @@ exports.createEvent = async (req, res) => {
 
     res.status(201).json({ message: "Event created", event });
   } catch (error) {
+    if (/location|latitude|longitude/i.test(error.message)) {
+      return res.status(400).json({ message: error.message });
+    }
+
     res.status(400).json({ message: "Failed to create event", error: error.message });
   }
 };

@@ -8,16 +8,25 @@ const credentials = {
     name: "Integration Admin",
     email: `integration-admin-${suffix}@example.com`,
     password: "admin123",
+    locationLabel: "Hyderabad, India",
+    latitude: 17.385044,
+    longitude: 78.486671,
   },
   organizer: {
     username: `integration-organizer-${suffix}`,
     email: `integration-organizer-${suffix}@example.com`,
     password: "organizer123",
+    locationLabel: "Mumbai, India",
+    latitude: 19.07609,
+    longitude: 72.877426,
   },
   volunteer: {
     username: `integration-volunteer-${suffix}`,
     email: `integration-volunteer-${suffix}@example.com`,
     password: "volunteer123",
+    locationLabel: "Pune, India",
+    latitude: 18.52043,
+    longitude: 73.856743,
   },
 };
 
@@ -77,6 +86,17 @@ test("authentication and protected role workflows", async () => {
   assert.equal(health.response.status, 200);
   assert.deepEqual(health.data, { status: "ok", database: "connected" });
 
+  const missingLocation = await request("/volunteer/create-volunteer", {
+    method: "POST",
+    body: {
+      username: `missing-location-${suffix}`,
+      email: `missing-location-${suffix}@example.com`,
+      password: "volunteer123",
+    },
+  });
+  assert.equal(missingLocation.response.status, 400);
+  assert.match(missingLocation.data.message, /location/i);
+
   await register("admin");
   const organizer = await register("organizer");
   const volunteer = await register("volunteer");
@@ -95,6 +115,9 @@ test("authentication and protected role workflows", async () => {
   const currentAccount = await request("/account/me", { token: adminToken });
   assert.equal(currentAccount.response.status, 200);
   assert.equal(currentAccount.data.account.email, credentials.admin.email);
+  assert.equal(currentAccount.data.account.locationLabel, credentials.admin.locationLabel);
+  assert.equal(currentAccount.data.account.latitude, credentials.admin.latitude);
+  assert.equal(currentAccount.data.account.longitude, credentials.admin.longitude);
   assert.equal(currentAccount.data.account.password, undefined);
 
   const updatedAccount = await request("/account/profile", {
@@ -109,6 +132,9 @@ test("authentication and protected role workflows", async () => {
     username: `delete-me-${suffix}`,
     email: `delete-me-${suffix}@example.com`,
     password: "delete123",
+    locationLabel: "Delhi, India",
+    latitude: 28.613939,
+    longitude: 77.209023,
   };
   const deletedAccount = await request("/volunteer/create-volunteer", {
     method: "POST",
@@ -200,6 +226,9 @@ test("authentication and protected role workflows", async () => {
       name: `Integration Event ${suffix}`,
       description: "Event created by automated integration testing",
       place: "Integration Hall",
+      locationLabel: "Integration Hall, Hyderabad, India",
+      latitude: 17.385044,
+      longitude: 78.486671,
       eventDate: "2026-10-01",
       startTime: "09:00",
       endTime: "12:00",
@@ -207,6 +236,42 @@ test("authentication and protected role workflows", async () => {
   });
   assert.equal(event.response.status, 201, JSON.stringify(event.data));
   const eventId = event.data.event.id;
+  assert.equal(event.data.event.locationLabel, "Integration Hall, Hyderabad, India");
+  assert.equal(event.data.event.latitude, 17.385044);
+  assert.equal(event.data.event.longitude, 78.486671);
+
+  const nearerEvent = await request("/organizer/events/create", {
+    method: "POST",
+    token: organizerToken,
+    body: {
+      name: `Nearby Integration Event ${suffix}`,
+      description: "A nearer event for sorting assertions",
+      place: "Pune, Maharashtra, India",
+      locationLabel: "Pune, Maharashtra, India",
+      latitude: 18.52043,
+      longitude: 73.856743,
+      eventDate: "2026-11-01",
+      startTime: "09:00",
+      endTime: "12:00",
+    },
+  });
+  assert.equal(nearerEvent.response.status, 201, JSON.stringify(nearerEvent.data));
+  const nearerEventId = nearerEvent.data.event.id;
+
+  const invalidEvent = await request("/organizer/events/create", {
+    method: "POST",
+    token: organizerToken,
+    body: {
+      name: "Invalid Location Event",
+      description: "Should fail without coordinates",
+      place: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+      eventDate: "2026-10-02",
+      startTime: "09:00",
+      endTime: "12:00",
+    },
+  });
+  assert.equal(invalidEvent.response.status, 400);
+  assert.match(invalidEvent.data.message, /location|latitude|longitude/i);
 
   const task = await request(`/organizer/events/${eventId}/tasks`, {
     method: "POST",
@@ -220,9 +285,25 @@ test("authentication and protected role workflows", async () => {
   assert.equal(task.response.status, 201, JSON.stringify(task.data));
   const taskId = task.data.task.id;
 
-  const volunteerEvents = await request("/volunteer/events", { token: volunteerToken });
+  const volunteerEvents = await request("/volunteer/events?sort=soonest", { token: volunteerToken });
   assert.equal(volunteerEvents.response.status, 200);
-  assert.ok(volunteerEvents.data.some((listedEvent) => listedEvent.id === eventId));
+  assert.equal(volunteerEvents.data.sort, "soonest");
+  assert.ok(volunteerEvents.data.events.some((listedEvent) => listedEvent.id === eventId));
+  const nearestEvents = await request("/volunteer/events?sort=nearest", { token: volunteerToken });
+  assert.equal(nearestEvents.response.status, 200);
+  assert.equal(typeof nearestEvents.data.events.find((listedEvent) => listedEvent.id === eventId).distanceKm, "number");
+  assert.ok(nearestEvents.data.events.findIndex((listedEvent) => listedEvent.id === nearerEventId)
+    < nearestEvents.data.events.findIndex((listedEvent) => listedEvent.id === eventId));
+  const newestEvents = await request("/volunteer/events?sort=newest", { token: volunteerToken });
+  assert.equal(newestEvents.response.status, 200);
+  assert.equal(newestEvents.data.sort, "newest");
+  assert.ok(newestEvents.data.events.findIndex((listedEvent) => listedEvent.id === nearerEventId)
+    < newestEvents.data.events.findIndex((listedEvent) => listedEvent.id === eventId));
+  const availableEvents = await request("/volunteer/events?sort=available", { token: volunteerToken });
+  assert.equal(availableEvents.response.status, 200);
+  assert.equal(typeof availableEvents.data.events[0].availableSlots, "number");
+  const invalidSort = await request("/volunteer/events?sort=invalid", { token: volunteerToken });
+  assert.equal(invalidSort.response.status, 400);
 
   const registration = await request("/volunteer/events/register-task", {
     method: "POST",

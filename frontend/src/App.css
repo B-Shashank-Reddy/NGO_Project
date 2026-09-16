@@ -105,6 +105,65 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+.location-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.location-button {
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px 12px;
+}
+
+.location-hint {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.location-suggestions {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+}
+
+.location-suggestions button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.location-suggestions button:last-child {
+  border-bottom: none;
+}
+
+.location-suggestions button:hover {
+  background: #eff6ff;
+}
+
+.location-suggestions span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
 .dashboard-shell {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
@@ -212,6 +271,24 @@
   font: inherit;
 }
 
+.account-location-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.account-location-fields {
+  gap: 8px;
+}
+
+.account-location-suggestions {
+  max-height: 190px;
+  overflow-y: auto;
+}
+
 .menu-action,
 .delete-account-button {
   width: 100%;
@@ -251,6 +328,28 @@
 .section-heading h3 {
   margin: 6px 0 0;
   font-size: 1.35rem;
+}
+
+.volunteer-heading {
+  align-items: end;
+}
+
+.sort-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.sort-control select {
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: white;
+  color: #0f172a;
+  font: inherit;
+  padding: 9px 10px;
 }
 
 .eyebrow {
@@ -409,6 +508,14 @@
   resize: vertical;
 }
 
+.event-location-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #334155;
+  font-weight: 600;
+}
+
 .inline-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -434,6 +541,51 @@
 .task-item span,
 .event-card small {
   color: #475569;
+}
+
+.event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.event-meta span {
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 9px;
+}
+
+.weather-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  border-left: 3px solid #38bdf8;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  padding: 10px 12px;
+}
+
+.weather-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weather-card span,
+.weather-unavailable {
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.weather-unavailable {
+  display: block;
+  margin-top: 10px;
 }
 
 .task-list {

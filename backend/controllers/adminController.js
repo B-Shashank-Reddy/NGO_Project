@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { Admin, Organizer, Volunteer, Event, Task, VolunteerTaskRegistration } = require("../models");
+const { resolveLocation } = require("../services/locationService");
 
 const signToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET || "supersecret", {
@@ -105,7 +106,7 @@ exports.updateVolunteerStatus = updateAccountStatus(Volunteer, "Volunteer");
 
 exports.createAdmin = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, locationLabel, latitude, longitude } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
@@ -115,11 +116,17 @@ exports.createAdmin = async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
+    const location = await resolveLocation({ locationLabel, latitude, longitude });
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const admin = await Admin.create({ name, email, password: hashedPassword });
+    const admin = await Admin.create({ name, email, password: hashedPassword, ...location });
     res.status(201).json({ message: "Admin created", admin: { id: admin.id, name: admin.name, email: admin.email } });
   } catch (error) {
+    if (/location|latitude|longitude/i.test(error.message)) {
+      return res.status(400).json({ message: error.message });
+    }
+
     if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({ message: "Admin email already exists" });
     }

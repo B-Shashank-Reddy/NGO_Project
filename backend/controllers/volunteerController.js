@@ -1,6 +1,22 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { sequelize, Volunteer, Event, Task, VolunteerTaskRegistration } = require("../models");
+const { resolveLocation } = require("../services/locationService");
+
+const SORT_MODES = new Set(["nearest", "soonest", "newest", "available"]);
+
+const calculateDistanceKm = (latitudeOne, longitudeOne, latitudeTwo, longitudeTwo) => {
+  const earthRadiusKm = 6371;
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const latitudeDelta = toRadians(latitudeTwo - latitudeOne);
+  const longitudeDelta = toRadians(longitudeTwo - longitudeOne);
+  const latitudeOneRadians = toRadians(latitudeOne);
+  const latitudeTwoRadians = toRadians(latitudeTwo);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(latitudeOneRadians) * Math.cos(latitudeTwoRadians) * Math.sin(longitudeDelta / 2) ** 2;
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
 
 const signToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET || "supersecret", {
@@ -10,7 +26,7 @@ const signToken = (payload) => {
 
 exports.createVolunteer = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, locationLabel, latitude, longitude } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ message: "Username, email, and password are required" });
@@ -20,11 +36,17 @@ exports.createVolunteer = async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
+    const location = await resolveLocation({ locationLabel, latitude, longitude });
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const volunteer = await Volunteer.create({ username, email, password: hashedPassword });
+    const volunteer = await Volunteer.create({ username, email, password: hashedPassword, ...location });
     res.status(201).json({ message: "Volunteer created", volunteer: { id: volunteer.id, username: volunteer.username, email: volunteer.email } });
   } catch (error) {
+    if (/location|latitude|longitude/i.test(error.message)) {
+      return res.status(400).json({ message: error.message });
+    }
+
     if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({ message: "Volunteer username or email already exists" });
     }
@@ -64,10 +86,66 @@ exports.loginVolunteer = async (req, res) => {
 
 exports.getAllEvents = async (req, res) => {
   try {
+    const sort = typeof req.query.sort === "string" ? req.query.sort : "soonest";
+
+    if (!SORT_MODES.has(sort)) {
+      return res.status(400).json({ message: "sort must be one of nearest, soonest, newest, or available" });
+    }
+
+    const volunteer = await Volunteer.findByPk(req.user.id, {
+      attributes: ["id", "latitude", "longitude"],
+    });
+
+    if (!volunteer) {
+      return res.status(404).json({ message: "Volunteer account not found" });
+    }
+
+    if (sort === "nearest" && (!Number.isFinite(Number(volunteer.latitude)) || !Number.isFinite(Number(volunteer.longitude)))) {
+      return res.status(400).json({ message: "Set your location before sorting events by nearest" });
+    }
+
     const events = await Event.findAll({
+      where: { isActive: true },
       include: [{ association: "tasks" }],
     });
-    res.status(200).json(events);
+
+    const enrichedEvents = events.map((event) => {
+      const eventData = event.toJSON();
+      const availableSlots = eventData.tasks.reduce(
+        (total, task) => total + Math.max(0, task.requiredVolunteers - task.filledVolunteers),
+        0,
+      );
+      const hasCoordinates = Number.isFinite(Number(eventData.latitude))
+        && Number.isFinite(Number(eventData.longitude));
+
+      return {
+        ...eventData,
+        availableSlots,
+        distanceKm: hasCoordinates
+          ? Number(calculateDistanceKm(
+            Number(volunteer.latitude),
+            Number(volunteer.longitude),
+            Number(eventData.latitude),
+            Number(eventData.longitude),
+          ).toFixed(2))
+          : null,
+      };
+    });
+
+    enrichedEvents.sort((eventOne, eventTwo) => {
+      if (sort === "nearest") {
+        return (eventOne.distanceKm ?? Number.POSITIVE_INFINITY) - (eventTwo.distanceKm ?? Number.POSITIVE_INFINITY);
+      }
+      if (sort === "newest") {
+        return new Date(eventTwo.createdAt) - new Date(eventOne.createdAt);
+      }
+      if (sort === "available") {
+        return eventTwo.availableSlots - eventOne.availableSlots;
+      }
+      return new Date(eventOne.eventDate) - new Date(eventTwo.eventDate);
+    });
+
+    res.status(200).json({ sort, events: enrichedEvents });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch events", error: error.message });
   }

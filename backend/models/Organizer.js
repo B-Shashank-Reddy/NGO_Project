@@ -30,6 +30,9 @@ const Organizer = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    locationLabel: DataTypes.STRING,
+    latitude: DataTypes.DOUBLE,
+    longitude: DataTypes.DOUBLE,
   },
   {
     tableName: "organizers",

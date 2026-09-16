@@ -6,6 +6,8 @@ const adminRouter = require("./routers/adminRouter");
 const organizerRouter = require("./routers/organizerRouter");
 const volunteerRouter = require("./routers/volunteerRouter");
 const accountRouter = require("./routers/accountRouter");
+const locationRouter = require("./routers/locationRouter");
+const weatherRouter = require("./routers/weatherRouter");
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -25,6 +27,8 @@ app.use("/admin", adminRouter);
 app.use("/organizer", organizerRouter);
 app.use("/volunteer", volunteerRouter);
 app.use("/account", accountRouter);
+app.use("/location", locationRouter);
+app.use("/events", weatherRouter);
 
 const startServer = async () => {
   try {

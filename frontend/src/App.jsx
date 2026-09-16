@@ -68,6 +68,9 @@ const emptyForm = {
   username: '',
   email: '',
   password: '',
+  locationLabel: '',
+  latitude: '',
+  longitude: '',
 };
 
 function App() {
@@ -83,13 +86,20 @@ function App() {
   const [organizerLoading, setOrganizerLoading] = useState(false);
   const [volunteerEvents, setVolunteerEvents] = useState([]);
   const [volunteerRegistrations, setVolunteerRegistrations] = useState([]);
-  const [eventForm, setEventForm] = useState({ name: '', description: '', place: '', eventDate: '', startTime: '09:00', endTime: '12:00' });
+  const [volunteerSort, setVolunteerSort] = useState('soonest');
+  const [volunteerLoading, setVolunteerLoading] = useState(false);
+  const [eventWeather, setEventWeather] = useState({});
+  const [eventForm, setEventForm] = useState({ name: '', description: '', place: '', locationLabel: '', latitude: '', longitude: '', eventDate: '', startTime: '09:00', endTime: '12:00' });
   const [taskForm, setTaskForm] = useState({ eventId: '', title: '', description: '', requiredVolunteers: '1' });
   const [statusUpdateId, setStatusUpdateId] = useState('');
   const [account, setAccount] = useState(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [accountForm, setAccountForm] = useState({ name: '', username: '', password: '' });
+  const [accountForm, setAccountForm] = useState({ name: '', username: '', password: '', locationLabel: '', latitude: '', longitude: '' });
   const [accountLoading, setAccountLoading] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [eventLocationSuggestions, setEventLocationSuggestions] = useState([]);
+  const [eventLocationLoading, setEventLocationLoading] = useState(false);
 
   const isLoggedIn = Boolean(session.token);
   const activeRole = session.role || role;
@@ -119,15 +129,116 @@ function App() {
 
   useEffect(() => {
     if (session.role === 'volunteer' && session.token) {
-      loadVolunteerDashboard();
+      loadVolunteerDashboard(volunteerSort);
     }
-  }, [session.role, session.token]);
+  }, [session.role, session.token, volunteerSort]);
 
   useEffect(() => {
     if (session.token) {
       loadAccount();
     }
   }, [session.token]);
+
+  useEffect(() => {
+    if (mode !== 'register' || form.locationLabel.trim().length < 3 || (form.latitude && form.longitude)) {
+      setLocationSuggestions([]);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLocationLoading(true);
+
+      try {
+        const response = await fetch(`${API_BASE}/location/search?q=${encodeURIComponent(form.locationLabel)}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          setLocationSuggestions(data.locations || []);
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setError('Location search is temporarily unavailable.');
+        }
+      } finally {
+        setLocationLoading(false);
+      }
+    }, 450);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [form.locationLabel, form.latitude, form.longitude, mode]);
+
+  useEffect(() => {
+    if (!accountMenuOpen || accountForm.locationLabel.trim().length < 3 || (accountForm.latitude && accountForm.longitude)) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLocationLoading(true);
+
+      try {
+        const response = await fetch(`${API_BASE}/location/search?q=${encodeURIComponent(accountForm.locationLabel)}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          setLocationSuggestions(data.locations || []);
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setError('Location search is temporarily unavailable.');
+        }
+      } finally {
+        setLocationLoading(false);
+      }
+    }, 450);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [accountForm.locationLabel, accountForm.latitude, accountForm.longitude, accountMenuOpen]);
+
+  useEffect(() => {
+    if (activeRole !== 'organizer' || eventForm.locationLabel.trim().length < 3 || (eventForm.latitude && eventForm.longitude)) {
+      setEventLocationSuggestions([]);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setEventLocationLoading(true);
+
+      try {
+        const response = await fetch(`${API_BASE}/location/search?q=${encodeURIComponent(eventForm.locationLabel)}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          setEventLocationSuggestions(data.locations || []);
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setError('Location search is temporarily unavailable.');
+        }
+      } finally {
+        setEventLocationLoading(false);
+      }
+    }, 450);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeRole, eventForm.locationLabel, eventForm.latitude, eventForm.longitude]);
 
   const loadAccount = async () => {
     try {
@@ -143,6 +254,9 @@ function App() {
         name: data.account.name || '',
         username: data.account.username || '',
         password: '',
+        locationLabel: data.account.locationLabel || '',
+        latitude: data.account.latitude ?? '',
+        longitude: data.account.longitude ?? '',
       });
     } catch (error) {
       setError(error.message);
@@ -209,13 +323,15 @@ function App() {
     }
   };
 
-  const loadVolunteerDashboard = async () => {
+  const loadVolunteerDashboard = async (sort = volunteerSort) => {
+    setVolunteerLoading(true);
+
     try {
       const payload = decodeToken(session.token);
       const volunteerId = payload?.id;
 
       const [eventsRes, registrationsRes] = await Promise.all([
-        fetch(`${API_BASE}/volunteer/events`, { headers: buildHeaders(session.token) }),
+        fetch(`${API_BASE}/volunteer/events?sort=${encodeURIComponent(sort)}`, { headers: buildHeaders(session.token) }),
         volunteerId
           ? fetch(`${API_BASE}/volunteer/registrations/${volunteerId}`, { headers: buildHeaders(session.token) })
           : Promise.resolve({ ok: true, json: async () => [] }),
@@ -230,11 +346,30 @@ function App() {
         throw new Error(events.message || 'Unable to load events');
       }
 
-      setVolunteerEvents(Array.isArray(events) ? events : []);
+      setVolunteerEvents(Array.isArray(events.events) ? events.events : []);
       setVolunteerRegistrations(Array.isArray(registrations) ? registrations : []);
+      await loadEventWeather(Array.isArray(events.events) ? events.events : []);
     } catch (error) {
       setError(error.message);
+    } finally {
+      setVolunteerLoading(false);
     }
+  };
+
+  const loadEventWeather = async (events) => {
+    const weatherEntries = await Promise.all(events.map(async (event) => {
+      try {
+        const response = await fetch(`${API_BASE}/events/${event.id}/weather`, {
+          headers: buildHeaders(session.token),
+        });
+        const data = await response.json();
+        return [event.id, response.ok ? data : { unavailable: true, message: data.message }];
+      } catch (error) {
+        return [event.id, { unavailable: true, message: 'Weather unavailable' }];
+      }
+    }));
+
+    setEventWeather(Object.fromEntries(weatherEntries));
   };
 
   const handleSessionFromToken = (token) => {
@@ -262,6 +397,11 @@ function App() {
       const payload = {
         ...(role === 'admin' && mode === 'register' && { name: form.name }),
         ...(meta.includeUsername && mode === 'register' && { username: form.username }),
+        ...(mode === 'register' && {
+          locationLabel: form.locationLabel,
+          latitude: form.latitude,
+          longitude: form.longitude,
+        }),
         email: form.email,
         password: form.password,
       };
@@ -291,6 +431,32 @@ function App() {
     }
   };
 
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Browser location is not available. Enter coordinates manually.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setForm((prev) => ({ ...prev, latitude: coords.latitude.toFixed(6), longitude: coords.longitude.toFixed(6) }));
+        setError('');
+      },
+      () => setError('Location permission was not granted. Enter coordinates manually.'),
+    );
+  };
+
+  const selectLocation = (location) => {
+    setForm((prev) => ({
+      ...prev,
+      locationLabel: location.locationLabel,
+      latitude: String(location.latitude),
+      longitude: String(location.longitude),
+    }));
+    setLocationSuggestions([]);
+    setError('');
+  };
+
   const handleCreateEvent = async (event) => {
     event.preventDefault();
 
@@ -307,12 +473,45 @@ function App() {
         throw new Error(data.message || 'Unable to create event');
       }
 
-      setEventForm({ name: '', description: '', place: '', eventDate: '', startTime: '09:00', endTime: '12:00' });
+      setEventForm({ name: '', description: '', place: '', locationLabel: '', latitude: '', longitude: '', eventDate: '', startTime: '09:00', endTime: '12:00' });
       setResult(data);
       await loadOrganizerDashboard();
     } catch (error) {
       setError(error.message);
     }
+  };
+
+  const useCurrentEventLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Browser location is not available. Search for an event location instead.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setEventForm((prev) => ({
+          ...prev,
+          latitude: coords.latitude.toFixed(6),
+          longitude: coords.longitude.toFixed(6),
+          locationLabel: prev.locationLabel || 'Current device location',
+          place: prev.locationLabel || 'Current device location',
+        }));
+        setError('');
+      },
+      () => setError('Location permission was not granted. Search for an event location instead.'),
+    );
+  };
+
+  const selectEventLocation = (location) => {
+    setEventForm((prev) => ({
+      ...prev,
+      place: location.locationLabel,
+      locationLabel: location.locationLabel,
+      latitude: String(location.latitude),
+      longitude: String(location.longitude),
+    }));
+    setEventLocationSuggestions([]);
+    setError('');
   };
 
   const handleCreateTask = async (event) => {
@@ -367,7 +566,7 @@ function App() {
       }
 
       setResult(data);
-      await loadVolunteerDashboard();
+      await loadVolunteerDashboard(volunteerSort);
     } catch (error) {
       setError(error.message);
     }
@@ -413,7 +612,9 @@ function App() {
     setDashboard({ stats: null, organizers: [], volunteers: [], events: [], registrations: [] });
     setOrganizerEvents([]);
     setVolunteerEvents([]);
+    setVolunteerSort('soonest');
     setVolunteerRegistrations([]);
+    setEventWeather({});
     setAccount(null);
     setAccountMenuOpen(false);
     setResult(null);
@@ -429,6 +630,9 @@ function App() {
       const body = {
         ...(activeRole === 'admin' ? { name: accountForm.name } : { username: accountForm.username }),
         ...(accountForm.password ? { password: accountForm.password } : {}),
+        locationLabel: accountForm.locationLabel,
+        latitude: accountForm.latitude,
+        longitude: accountForm.longitude,
       };
       const response = await fetch(`${API_BASE}/account/profile`, {
         method: 'PATCH',
@@ -446,6 +650,9 @@ function App() {
         name: data.account.name || '',
         username: data.account.username || '',
         password: '',
+        locationLabel: data.account.locationLabel || '',
+        latitude: data.account.latitude ?? '',
+        longitude: data.account.longitude ?? '',
       });
       setResult(data);
     } catch (error) {
@@ -477,6 +684,36 @@ function App() {
       setError(error.message);
       setAccountLoading(false);
     }
+  };
+
+  const useCurrentAccountLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Browser location is not available. Search for a location instead.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setAccountForm((prev) => ({
+          ...prev,
+          latitude: coords.latitude.toFixed(6),
+          longitude: coords.longitude.toFixed(6),
+        }));
+        setError('');
+      },
+      () => setError('Location permission was not granted. Search for a location instead.'),
+    );
+  };
+
+  const selectAccountLocation = (location) => {
+    setAccountForm((prev) => ({
+      ...prev,
+      locationLabel: location.locationLabel,
+      latitude: String(location.latitude),
+      longitude: String(location.longitude),
+    }));
+    setLocationSuggestions([]);
+    setError('');
   };
 
   const summaryCards = useMemo(() => {
@@ -530,6 +767,32 @@ function App() {
                   ) : (
                     <input type="text" value={accountForm.username} onChange={(e) => setAccountForm({ ...accountForm, username: e.target.value })} placeholder="Username" required />
                   )}
+                  <label className="account-location-label">
+                    Location
+                    <input
+                      type="text"
+                      value={accountForm.locationLabel}
+                      onChange={(event) => setAccountForm((prev) => ({ ...prev, locationLabel: event.target.value, latitude: '', longitude: '' }))}
+                      placeholder="Search city or address"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <div className="location-fields account-location-fields">
+                    <input type="number" value={accountForm.latitude} onChange={(event) => setAccountForm({ ...accountForm, latitude: event.target.value })} placeholder="Latitude" min="-90" max="90" step="any" />
+                    <input type="number" value={accountForm.longitude} onChange={(event) => setAccountForm({ ...accountForm, longitude: event.target.value })} placeholder="Longitude" min="-180" max="180" step="any" />
+                  </div>
+                  {locationLoading && <small className="location-hint">Searching locations...</small>}
+                  {!!locationSuggestions.length && (
+                    <div className="location-suggestions account-location-suggestions">
+                      {locationSuggestions.map((location) => (
+                        <button type="button" key={`${location.latitude}-${location.longitude}-${location.locationLabel}`} onClick={() => selectAccountLocation(location)}>
+                          <strong>{location.locationLabel}</strong>
+                          <span>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button type="button" className="location-button" onClick={useCurrentAccountLocation}>Use current location</button>
                   <input type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} placeholder="New password (optional)" minLength="6" />
                   <button type="submit" className="menu-action" disabled={accountLoading}>{accountLoading ? 'Saving...' : 'Save changes'}</button>
                 </form>
@@ -621,7 +884,33 @@ function App() {
                 <h3>Create Event</h3>
                 <input type="text" placeholder="Event name" value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} required />
                 <textarea placeholder="Event description" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} required />
-                <input type="text" placeholder="Location" value={eventForm.place} onChange={(e) => setEventForm({ ...eventForm, place: e.target.value })} required />
+                <label className="event-location-label">
+                  Event location
+                  <input
+                    type="text"
+                    placeholder="Search exact venue or address"
+                    value={eventForm.locationLabel}
+                    onChange={(e) => setEventForm({ ...eventForm, place: e.target.value, locationLabel: e.target.value, latitude: '', longitude: '' })}
+                    autoComplete="off"
+                    required
+                  />
+                  {eventLocationLoading && <small className="location-hint">Searching locations...</small>}
+                  {!!eventLocationSuggestions.length && (
+                    <div className="location-suggestions">
+                      {eventLocationSuggestions.map((location) => (
+                        <button type="button" key={`${location.latitude}-${location.longitude}-${location.locationLabel}`} onClick={() => selectEventLocation(location)}>
+                          <strong>{location.locationLabel}</strong>
+                          <span>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </label>
+                <div className="location-fields">
+                  <input type="number" placeholder="Latitude" value={eventForm.latitude} min="-90" max="90" step="any" readOnly required />
+                  <input type="number" placeholder="Longitude" value={eventForm.longitude} min="-180" max="180" step="any" readOnly required />
+                </div>
+                <button type="button" className="location-button" onClick={useCurrentEventLocation}>Use current location</button>
                 <div className="inline-fields">
                   <input type="date" value={eventForm.eventDate} onChange={(e) => setEventForm({ ...eventForm, eventDate: e.target.value })} required />
                   <input type="time" value={eventForm.startTime} onChange={(e) => setEventForm({ ...eventForm, startTime: e.target.value })} required />
@@ -674,13 +963,44 @@ function App() {
           <div className="dashboard-section">
             <div className="data-grid single-column">
               <div className="data-panel">
-                <h3>Available events</h3>
+                <div className="section-heading volunteer-heading">
+                  <div>
+                    <span className="eyebrow">Volunteer discovery</span>
+                    <h3>Available events</h3>
+                  </div>
+                  <label className="sort-control">
+                    Sort by
+                    <select value={volunteerSort} onChange={(event) => setVolunteerSort(event.target.value)} disabled={volunteerLoading}>
+                      <option value="nearest">Nearest location</option>
+                      <option value="soonest">Soonest date</option>
+                      <option value="newest">Recently added</option>
+                      <option value="available">Most available</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="event-list">
                   {volunteerEvents.map((event) => (
                     <div className="event-card" key={event.id}>
                       <h4>{event.name}</h4>
                       <p>{event.description}</p>
-                      <small>{event.place} • {new Date(event.eventDate).toLocaleDateString()}</small>
+                      <small>{event.locationLabel || event.place} • {new Date(event.eventDate).toLocaleDateString()}</small>
+                      <div className="event-meta">
+                        {event.distanceKm !== null && <span>{event.distanceKm} km away</span>}
+                        <span>{event.availableSlots} volunteer slots available</span>
+                      </div>
+                      {eventWeather[event.id] && !eventWeather[event.id].unavailable && (
+                        <div className="weather-card">
+                          <div>
+                            <strong>{eventWeather[event.id].condition}</strong>
+                            <span>{eventWeather[event.id].temperature.min}°C - {eventWeather[event.id].temperature.max}°C</span>
+                          </div>
+                          <div>
+                            <span>Rain {eventWeather[event.id].rainProbability ?? 0}%</span>
+                            <span>Wind {eventWeather[event.id].windSpeed} {eventWeather[event.id].windUnit}</span>
+                          </div>
+                        </div>
+                      )}
+                      {eventWeather[event.id]?.unavailable && <small className="weather-unavailable">Weather forecast unavailable for this event date.</small>}
                       <div className="task-list">
                         {(event.tasks || []).map((task) => (
                           <div className="task-item" key={task.id}>
@@ -708,6 +1028,8 @@ function App() {
                       </div>
                     </div>
                   ))}
+                  {volunteerLoading && <div className="empty-state-panel">Loading events...</div>}
+                  {!volunteerLoading && !volunteerEvents.length && <div className="empty-state-panel">No active events match this view.</div>}
                 </div>
               </div>
 
@@ -800,6 +1122,39 @@ function App() {
                 required
               />
             </label>
+          )}
+
+          {mode === 'register' && (
+            <>
+              <label>
+                Location
+                <input
+                  type="text"
+                  name="locationLabel"
+                  value={form.locationLabel}
+                  onChange={(event) => setForm((prev) => ({ ...prev, locationLabel: event.target.value, latitude: '', longitude: '' }))}
+                  placeholder="Search city or address"
+                  autoComplete="off"
+                  required
+                />
+                {locationLoading && <small className="location-hint">Searching locations...</small>}
+                {!!locationSuggestions.length && (
+                  <div className="location-suggestions">
+                    {locationSuggestions.map((location) => (
+                      <button type="button" key={`${location.latitude}-${location.longitude}-${location.locationLabel}`} onClick={() => selectLocation(location)}>
+                        <strong>{location.locationLabel}</strong>
+                        <span>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </label>
+              <div className="location-fields">
+                <input type="number" name="latitude" value={form.latitude} onChange={handleChange} placeholder="Latitude" min="-90" max="90" step="any" required />
+                <input type="number" name="longitude" value={form.longitude} onChange={handleChange} placeholder="Longitude" min="-180" max="180" step="any" required />
+              </div>
+              <button type="button" className="location-button" onClick={useCurrentLocation}>Use my current location</button>
+            </>
           )}
 
           <label>

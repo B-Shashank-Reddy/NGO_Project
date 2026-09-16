@@ -302,6 +302,12 @@ test("authentication and protected role workflows", async () => {
   const availableEvents = await request("/volunteer/events?sort=available", { token: volunteerToken });
   assert.equal(availableEvents.response.status, 200);
   assert.equal(typeof availableEvents.data.events[0].availableSlots, "number");
+  const paginatedEvents = await request("/volunteer/events?sort=soonest&page=1&limit=1", { token: volunteerToken });
+  assert.equal(paginatedEvents.response.status, 200);
+  assert.equal(paginatedEvents.data.page, 1);
+  assert.equal(paginatedEvents.data.limit, 1);
+  assert.equal(paginatedEvents.data.events.length, 1);
+  assert.equal(typeof paginatedEvents.data.total, "number");
   const invalidSort = await request("/volunteer/events?sort=invalid", { token: volunteerToken });
   assert.equal(invalidSort.response.status, 400);
 

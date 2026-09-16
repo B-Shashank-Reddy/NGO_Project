@@ -87,6 +87,12 @@ exports.loginVolunteer = async (req, res) => {
 exports.getAllEvents = async (req, res) => {
   try {
     const sort = typeof req.query.sort === "string" ? req.query.sort : "soonest";
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 50)
+      : 20;
 
     if (!SORT_MODES.has(sort)) {
       return res.status(400).json({ message: "sort must be one of nearest, soonest, newest, or available" });
@@ -145,7 +151,18 @@ exports.getAllEvents = async (req, res) => {
       return new Date(eventOne.eventDate) - new Date(eventTwo.eventDate);
     });
 
-    res.status(200).json({ sort, events: enrichedEvents });
+    const total = enrichedEvents.length;
+    const start = (page - 1) * limit;
+    const eventsForPage = enrichedEvents.slice(start, start + limit);
+
+    res.status(200).json({
+      sort,
+      page,
+      limit,
+      total,
+      hasNext: start + limit < total,
+      events: eventsForPage,
+    });
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch events", error: error.message });
   }

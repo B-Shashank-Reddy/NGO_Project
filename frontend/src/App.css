@@ -641,6 +641,17 @@
   text-align: center;
 }
 
+.load-more-button {
+  align-self: center;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px 16px;
+}
+
 .small-button {
   background: linear-gradient(135deg, #10b981, #22c55e);
   color: white;

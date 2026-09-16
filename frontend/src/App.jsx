@@ -88,6 +88,8 @@ function App() {
   const [volunteerRegistrations, setVolunteerRegistrations] = useState([]);
   const [volunteerSort, setVolunteerSort] = useState('soonest');
   const [volunteerLoading, setVolunteerLoading] = useState(false);
+  const [volunteerPage, setVolunteerPage] = useState(1);
+  const [volunteerHasNext, setVolunteerHasNext] = useState(false);
   const [eventWeather, setEventWeather] = useState({});
   const [eventForm, setEventForm] = useState({ name: '', description: '', place: '', locationLabel: '', latitude: '', longitude: '', eventDate: '', startTime: '09:00', endTime: '12:00' });
   const [taskForm, setTaskForm] = useState({ eventId: '', title: '', description: '', requiredVolunteers: '1' });
@@ -129,7 +131,8 @@ function App() {
 
   useEffect(() => {
     if (session.role === 'volunteer' && session.token) {
-      loadVolunteerDashboard(volunteerSort);
+      setVolunteerPage(1);
+      loadVolunteerDashboard(volunteerSort, 1, false);
     }
   }, [session.role, session.token, volunteerSort]);
 
@@ -323,7 +326,7 @@ function App() {
     }
   };
 
-  const loadVolunteerDashboard = async (sort = volunteerSort) => {
+  const loadVolunteerDashboard = async (sort = volunteerSort, page = 1, append = false) => {
     setVolunteerLoading(true);
 
     try {
@@ -331,7 +334,7 @@ function App() {
       const volunteerId = payload?.id;
 
       const [eventsRes, registrationsRes] = await Promise.all([
-        fetch(`${API_BASE}/volunteer/events?sort=${encodeURIComponent(sort)}`, { headers: buildHeaders(session.token) }),
+        fetch(`${API_BASE}/volunteer/events?sort=${encodeURIComponent(sort)}&page=${page}&limit=20`, { headers: buildHeaders(session.token) }),
         volunteerId
           ? fetch(`${API_BASE}/volunteer/registrations/${volunteerId}`, { headers: buildHeaders(session.token) })
           : Promise.resolve({ ok: true, json: async () => [] }),
@@ -346,7 +349,10 @@ function App() {
         throw new Error(events.message || 'Unable to load events');
       }
 
-      setVolunteerEvents(Array.isArray(events.events) ? events.events : []);
+      const nextEvents = Array.isArray(events.events) ? events.events : [];
+      setVolunteerEvents((currentEvents) => (append ? [...currentEvents, ...nextEvents] : nextEvents));
+      setVolunteerPage(events.page || page);
+      setVolunteerHasNext(Boolean(events.hasNext));
       setVolunteerRegistrations(Array.isArray(registrations) ? registrations : []);
       await loadEventWeather(Array.isArray(events.events) ? events.events : []);
     } catch (error) {
@@ -566,7 +572,7 @@ function App() {
       }
 
       setResult(data);
-      await loadVolunteerDashboard(volunteerSort);
+      await loadVolunteerDashboard(volunteerSort, 1, false);
     } catch (error) {
       setError(error.message);
     }
@@ -613,6 +619,8 @@ function App() {
     setOrganizerEvents([]);
     setVolunteerEvents([]);
     setVolunteerSort('soonest');
+    setVolunteerPage(1);
+    setVolunteerHasNext(false);
     setVolunteerRegistrations([]);
     setEventWeather({});
     setAccount(null);
@@ -1030,6 +1038,11 @@ function App() {
                   ))}
                   {volunteerLoading && <div className="empty-state-panel">Loading events...</div>}
                   {!volunteerLoading && !volunteerEvents.length && <div className="empty-state-panel">No active events match this view.</div>}
+                  {!volunteerLoading && volunteerHasNext && (
+                    <button type="button" className="load-more-button" onClick={() => loadVolunteerDashboard(volunteerSort, volunteerPage + 1, true)}>
+                      Load more events
+                    </button>
+                  )}
                 </div>
               </div>
 

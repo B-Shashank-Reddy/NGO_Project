@@ -32,7 +32,15 @@ const request = async (path, options = {}) => {
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
-  const data = await response.json();
+  const responseText = await response.text();
+  let data;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch (error) {
+    throw new Error(`Expected JSON from ${options.method || "GET"} ${path}, received ${response.status}: ${responseText.slice(0, 160)}`);
+  }
+
   return { response, data };
 };
 
@@ -46,6 +54,7 @@ const register = async (role) => {
   assert.equal(response.status, 201, `${role} registration should succeed: ${JSON.stringify(data)}`);
   assert.ok(data[role], `${role} registration should return the created user`);
   assert.equal(data[role].email, credentials[role].email);
+  return data[role];
 };
 
 const login = async (role) => {
@@ -69,8 +78,8 @@ test("authentication and protected role workflows", async () => {
   assert.deepEqual(health.data, { status: "ok", database: "connected" });
 
   await register("admin");
-  await register("organizer");
-  await register("volunteer");
+  const organizer = await register("organizer");
+  const volunteer = await register("volunteer");
 
   const duplicateOrganizer = await request("/organizer/create-organizer", {
     method: "POST",
@@ -82,6 +91,90 @@ test("authentication and protected role workflows", async () => {
   const adminToken = await login("admin");
   const organizerToken = await login("organizer");
   const volunteerToken = await login("volunteer");
+
+  const currentAccount = await request("/account/me", { token: adminToken });
+  assert.equal(currentAccount.response.status, 200);
+  assert.equal(currentAccount.data.account.email, credentials.admin.email);
+  assert.equal(currentAccount.data.account.password, undefined);
+
+  const updatedAccount = await request("/account/profile", {
+    method: "PATCH",
+    token: adminToken,
+    body: { name: "Updated Integration Admin" },
+  });
+  assert.equal(updatedAccount.response.status, 200);
+  assert.equal(updatedAccount.data.account.name, "Updated Integration Admin");
+
+  const deletedAccountCredentials = {
+    username: `delete-me-${suffix}`,
+    email: `delete-me-${suffix}@example.com`,
+    password: "delete123",
+  };
+  const deletedAccount = await request("/volunteer/create-volunteer", {
+    method: "POST",
+    body: deletedAccountCredentials,
+  });
+  assert.equal(deletedAccount.response.status, 201);
+  const deletedAccountLoginBeforeDelete = await request("/volunteer/login", {
+    method: "POST",
+    body: { email: deletedAccountCredentials.email, password: deletedAccountCredentials.password },
+  });
+  assert.equal(deletedAccountLoginBeforeDelete.response.status, 200);
+  const deletedAccountToken = deletedAccountLoginBeforeDelete.data.token;
+
+  const deletedAccountResult = await request("/account/me", {
+    method: "DELETE",
+    token: deletedAccountToken,
+  });
+  assert.equal(deletedAccountResult.response.status, 200);
+
+  const deletedAccountLogin = await request("/volunteer/login", {
+    method: "POST",
+    body: { email: deletedAccountCredentials.email, password: deletedAccountCredentials.password },
+  });
+  assert.equal(deletedAccountLogin.response.status, 401);
+
+  const deactivateOrganizer = await request(`/admin/organizers/${organizer.id}/status`, {
+    method: "PATCH",
+    token: adminToken,
+    body: { isActive: false },
+  });
+  assert.equal(deactivateOrganizer.response.status, 200);
+  assert.equal(deactivateOrganizer.data.organizer.isActive, false);
+
+  const inactiveOrganizerLogin = await request("/organizer/login", {
+    method: "POST",
+    body: { email: credentials.organizer.email, password: credentials.organizer.password },
+  });
+  assert.equal(inactiveOrganizerLogin.response.status, 403);
+
+  const reactivateOrganizer = await request(`/admin/organizers/${organizer.id}/status`, {
+    method: "PATCH",
+    token: adminToken,
+    body: { isActive: true },
+  });
+  assert.equal(reactivateOrganizer.response.status, 200);
+
+  const deactivateVolunteer = await request(`/admin/volunteers/${volunteer.id}/status`, {
+    method: "PATCH",
+    token: adminToken,
+    body: { isActive: false },
+  });
+  assert.equal(deactivateVolunteer.response.status, 200);
+  assert.equal(deactivateVolunteer.data.volunteer.isActive, false);
+
+  const inactiveVolunteerLogin = await request("/volunteer/login", {
+    method: "POST",
+    body: { email: credentials.volunteer.email, password: credentials.volunteer.password },
+  });
+  assert.equal(inactiveVolunteerLogin.response.status, 403);
+
+  const reactivateVolunteer = await request(`/admin/volunteers/${volunteer.id}/status`, {
+    method: "PATCH",
+    token: adminToken,
+    body: { isActive: true },
+  });
+  assert.equal(reactivateVolunteer.response.status, 200);
 
   const missingToken = await request("/admin/dashboard");
   assert.equal(missingToken.response.status, 401);

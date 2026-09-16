@@ -71,6 +71,38 @@ exports.getAllRegistrations = async (req, res) => {
   }
 };
 
+const updateAccountStatus = (Model, label) => async (req, res) => {
+  try {
+    const { isActive } = req.body;
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({ message: "isActive must be a boolean" });
+    }
+
+    const account = await Model.findByPk(req.params.id);
+
+    if (!account) {
+      return res.status(404).json({ message: `${label} not found` });
+    }
+
+    account.isActive = isActive;
+    await account.save();
+
+    res.status(200).json({
+      message: `${label} ${isActive ? "activated" : "deactivated"}`,
+      [label.toLowerCase()]: {
+        id: account.id,
+        isActive: account.isActive,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: `Failed to update ${label.toLowerCase()} status`, error: error.message });
+  }
+};
+
+exports.updateOrganizerStatus = updateAccountStatus(Organizer, "Organizer");
+exports.updateVolunteerStatus = updateAccountStatus(Volunteer, "Volunteer");
+
 exports.createAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;

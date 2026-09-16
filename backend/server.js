@@ -5,6 +5,7 @@ const { connectDatabase } = require("./config/db");
 const adminRouter = require("./routers/adminRouter");
 const organizerRouter = require("./routers/organizerRouter");
 const volunteerRouter = require("./routers/volunteerRouter");
+const accountRouter = require("./routers/accountRouter");
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -23,6 +24,7 @@ app.get("/health", (req, res) => {
 app.use("/admin", adminRouter);
 app.use("/organizer", organizerRouter);
 app.use("/volunteer", volunteerRouter);
+app.use("/account", accountRouter);
 
 const startServer = async () => {
   try {

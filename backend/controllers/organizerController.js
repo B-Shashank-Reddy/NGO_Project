@@ -46,6 +46,10 @@ exports.loginOrganizer = async (req, res) => {
       return res.status(401).json({ message: "Invalid organizer credentials" });
     }
 
+    if (!organizer.isActive) {
+      return res.status(403).json({ message: "Organizer account is inactive" });
+    }
+
     const isValidPassword = await bcrypt.compare(password, organizer.password);
     if (!isValidPassword) {
       return res.status(401).json({ message: "Invalid organizer credentials" });

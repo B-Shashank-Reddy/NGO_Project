@@ -85,6 +85,11 @@ function App() {
   const [volunteerRegistrations, setVolunteerRegistrations] = useState([]);
   const [eventForm, setEventForm] = useState({ name: '', description: '', place: '', eventDate: '', startTime: '09:00', endTime: '12:00' });
   const [taskForm, setTaskForm] = useState({ eventId: '', title: '', description: '', requiredVolunteers: '1' });
+  const [statusUpdateId, setStatusUpdateId] = useState('');
+  const [account, setAccount] = useState(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [accountForm, setAccountForm] = useState({ name: '', username: '', password: '' });
+  const [accountLoading, setAccountLoading] = useState(false);
 
   const isLoggedIn = Boolean(session.token);
   const activeRole = session.role || role;
@@ -117,6 +122,32 @@ function App() {
       loadVolunteerDashboard();
     }
   }, [session.role, session.token]);
+
+  useEffect(() => {
+    if (session.token) {
+      loadAccount();
+    }
+  }, [session.token]);
+
+  const loadAccount = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/account/me`, { headers: buildHeaders(session.token) });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to load account');
+      }
+
+      setAccount(data.account);
+      setAccountForm({
+        name: data.account.name || '',
+        username: data.account.username || '',
+        password: '',
+      });
+    } catch (error) {
+      setError(error.message);
+    }
+  };
 
   const loadAdminDashboard = async () => {
     try {
@@ -342,6 +373,39 @@ function App() {
     }
   };
 
+  const handleAccountStatus = async (accountType, account) => {
+    const nextStatus = !account.isActive;
+    const action = nextStatus ? 'activate' : 'deactivate';
+
+    if (!window.confirm(`Are you sure you want to ${action} ${account.username}?`)) {
+      return;
+    }
+
+    const key = `${accountType}-${account.id}`;
+    setStatusUpdateId(key);
+    setError('');
+
+    try {
+      const response = await fetch(`${API_BASE}/admin/${accountType}s/${account.id}/status`, {
+        method: 'PATCH',
+        headers: buildHeaders(session.token),
+        body: JSON.stringify({ isActive: nextStatus }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `Unable to ${action} account`);
+      }
+
+      setResult(data);
+      await loadAdminDashboard();
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setStatusUpdateId('');
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('ngo_token');
     localStorage.removeItem('ngo_role');
@@ -350,8 +414,69 @@ function App() {
     setOrganizerEvents([]);
     setVolunteerEvents([]);
     setVolunteerRegistrations([]);
+    setAccount(null);
+    setAccountMenuOpen(false);
     setResult(null);
     setError('');
+  };
+
+  const handleAccountUpdate = async (event) => {
+    event.preventDefault();
+    setAccountLoading(true);
+    setError('');
+
+    try {
+      const body = {
+        ...(activeRole === 'admin' ? { name: accountForm.name } : { username: accountForm.username }),
+        ...(accountForm.password ? { password: accountForm.password } : {}),
+      };
+      const response = await fetch(`${API_BASE}/account/profile`, {
+        method: 'PATCH',
+        headers: buildHeaders(session.token),
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to update account');
+      }
+
+      setAccount(data.account);
+      setAccountForm({
+        name: data.account.name || '',
+        username: data.account.username || '',
+        password: '',
+      });
+      setResult(data);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setAccountLoading(false);
+    }
+  };
+
+  const handleAccountDelete = async () => {
+    if (!window.confirm('Delete your account permanently? This action cannot be undone.')) {
+      return;
+    }
+
+    setAccountLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/account/me`, {
+        method: 'DELETE',
+        headers: buildHeaders(session.token),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to delete account');
+      }
+
+      logout();
+    } catch (error) {
+      setError(error.message);
+      setAccountLoading(false);
+    }
   };
 
   const summaryCards = useMemo(() => {
@@ -387,7 +512,32 @@ function App() {
             <span className="badge">NGO Dashboard</span>
             <h2>{activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} workspace</h2>
           </div>
-          <button type="button" className="logout-button" onClick={logout}>Logout</button>
+          <div className="account-area">
+            <button type="button" className="account-button" onClick={() => setAccountMenuOpen((open) => !open)}>
+              <span className="account-icon">{(account?.name || account?.username || account?.email || 'U').charAt(0).toUpperCase()}</span>
+              <span>{account?.name || account?.username || 'Account'}</span>
+            </button>
+            {accountMenuOpen && (
+              <div className="account-menu">
+                <div className="account-details">
+                  <strong>{account?.name || account?.username}</strong>
+                  <span>{account?.email}</span>
+                  <small>{activeRole}</small>
+                </div>
+                <form onSubmit={handleAccountUpdate} className="account-form">
+                  {activeRole === 'admin' ? (
+                    <input type="text" value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Name" required />
+                  ) : (
+                    <input type="text" value={accountForm.username} onChange={(e) => setAccountForm({ ...accountForm, username: e.target.value })} placeholder="Username" required />
+                  )}
+                  <input type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} placeholder="New password (optional)" minLength="6" />
+                  <button type="submit" className="menu-action" disabled={accountLoading}>{accountLoading ? 'Saving...' : 'Save changes'}</button>
+                </form>
+                <button type="button" className="menu-action" onClick={logout}>Logout</button>
+                <button type="button" className="delete-account-button" onClick={handleAccountDelete} disabled={accountLoading}>Delete account</button>
+              </div>
+            )}
+          </div>
         </header>
 
         {activeRole === 'admin' && (
@@ -406,7 +556,12 @@ function App() {
                 <h3>Organizers</h3>
                 <ul>
                   {dashboard.organizers.map((organizer) => (
-                    <li key={organizer.id}>{organizer.username} - {organizer.email}</li>
+                    <li className="managed-row" key={organizer.id}>
+                      <span>{organizer.username} - {organizer.email} <em className={organizer.isActive ? 'status-active' : 'status-inactive'}>{organizer.isActive ? 'Active' : 'Inactive'}</em></span>
+                      <button type="button" className="small-button management-button" onClick={() => handleAccountStatus('organizer', organizer)} disabled={statusUpdateId === `organizer-${organizer.id}`}>
+                        {statusUpdateId === `organizer-${organizer.id}` ? 'Saving...' : organizer.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -415,7 +570,12 @@ function App() {
                 <h3>Volunteers</h3>
                 <ul>
                   {dashboard.volunteers.map((volunteer) => (
-                    <li key={volunteer.id}>{volunteer.username} - {volunteer.email}</li>
+                    <li className="managed-row" key={volunteer.id}>
+                      <span>{volunteer.username} - {volunteer.email} <em className={volunteer.isActive ? 'status-active' : 'status-inactive'}>{volunteer.isActive ? 'Active' : 'Inactive'}</em></span>
+                      <button type="button" className="small-button management-button" onClick={() => handleAccountStatus('volunteer', volunteer)} disabled={statusUpdateId === `volunteer-${volunteer.id}`}>
+                        {statusUpdateId === `volunteer-${volunteer.id}` ? 'Saving...' : volunteer.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </li>
                   ))}
                 </ul>
               </div>

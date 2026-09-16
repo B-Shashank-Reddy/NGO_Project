@@ -46,6 +46,10 @@ exports.loginVolunteer = async (req, res) => {
       return res.status(401).json({ message: "Invalid volunteer credentials" });
     }
 
+    if (!volunteer.isActive) {
+      return res.status(403).json({ message: "Volunteer account is inactive" });
+    }
+
     const isValidPassword = await bcrypt.compare(password, volunteer.password);
     if (!isValidPassword) {
       return res.status(401).json({ message: "Invalid volunteer credentials" });

@@ -139,6 +139,100 @@
   padding: 10px 16px;
 }
 
+.account-area {
+  position: relative;
+}
+
+.account-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: white;
+  color: #0f172a;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 6px 12px 6px 7px;
+}
+
+.account-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: white;
+}
+
+.account-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(320px, calc(100vw - 56px));
+  padding: 16px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+}
+
+.account-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.account-details span,
+.account-details small {
+  color: #64748b;
+}
+
+.account-details small {
+  text-transform: capitalize;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 0;
+}
+
+.account-form input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.menu-action,
+.delete-account-button {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px;
+}
+
+.menu-action {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.delete-account-button {
+  margin-top: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 .dashboard-section {
   max-width: 1200px;
   margin: 0 auto;
@@ -251,6 +345,39 @@
   padding: 10px 0;
   border-bottom: 1px solid #e2e8f0;
   color: #334155;
+}
+
+.managed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.managed-row > span {
+  min-width: 0;
+}
+
+.managed-row em {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.status-active {
+  color: #15803d;
+}
+
+.status-inactive {
+  color: #b91c1c;
+}
+
+.management-button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  font-size: 0.8rem;
 }
 
 .wide {

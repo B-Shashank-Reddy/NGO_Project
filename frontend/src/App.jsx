@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
-const API_BASE = 'http://localhost:5001';
-
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 const decodeToken = (token) => {
   if (!token) return null;
 
